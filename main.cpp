@@ -32,7 +32,7 @@ struct car_args //struktura przechowująca indeks auta i wskaźnik na światła
 
 pthread_t threads[NUMBER_OF_CARS];
 struct car_args thread_args[NUMBER_OF_CARS]; //tablica przechowująca indeksy aut i wskaźnik na światła
-
+struct car_args crossing_args[4]; //tablica przechwytujaca
 vector<car> road1;
 vector<car> road2;
 bool loop = true; //boolean odpowiedzialny za petle aut
@@ -42,6 +42,11 @@ pthread_mutex_t mutex2 = PTHREAD_MUTEX_INITIALIZER; //mutex dla skrzyżowania 2
 pthread_mutex_t mutex3 = PTHREAD_MUTEX_INITIALIZER; //mutex dla skrzyżowania 3
 pthread_mutex_t mutex4 = PTHREAD_MUTEX_INITIALIZER; //mutex dla skrzyżowania 4
 
+
+pthread_cond_t cond1 = PTHREAD_COND_INITIALIZER;
+pthread_cond_t cond2 = PTHREAD_COND_INITIALIZER;
+pthread_cond_t cond3 = PTHREAD_COND_INITIALIZER;
+pthread_cond_t cond4 = PTHREAD_COND_INITIALIZER;
 
 void* printRoad(void* argument) //druk drogi
 {
@@ -464,32 +469,12 @@ void* LightsChanger(void* argument) //funkcja odpowiedzialna za zmienianie świa
     while(loop)
     {
         
-        pthread_mutex_lock(&mutex1);
         *lights = true;
-        pthread_mutex_unlock(&mutex1);
-        pthread_mutex_lock(&mutex2);
-        *(lights + 1) = true;
-        pthread_mutex_unlock(&mutex2);
-        pthread_mutex_lock(&mutex3);
-        *(lights + 2) = false;
-        pthread_mutex_unlock(&mutex3);
-        pthread_mutex_lock(&mutex4);
-        *(lights + 3) = false;
-        pthread_mutex_unlock(&mutex4);
 
         usleep(LIGHTS_TIME);
-        pthread_mutex_lock(&mutex1);
+        
         *lights = false;
-        pthread_mutex_unlock(&mutex1);
-        pthread_mutex_lock(&mutex2);
-        *(lights + 1) = false;
-        pthread_mutex_unlock(&mutex2);
-        pthread_mutex_lock(&mutex3);
-        *(lights + 2) = true;
-        pthread_mutex_unlock(&mutex3);
-        pthread_mutex_lock(&mutex4);
-        *(lights + 3) = true;
-        pthread_mutex_unlock(&mutex4);
+        
         usleep(LIGHTS_TIME);
 
     }
@@ -514,8 +499,17 @@ int main()
     *(lights+3) = true;
 
 
-    pthread_t lightChanger; 
-    int lc = pthread_create(&lightChanger,NULL,LightsChanger, &lights);
+    pthread_t crossing1;
+    pthread_t crossing2; 
+    pthread_t crossing3; 
+    pthread_t crossing4; 
+    int lc1 = pthread_create(&crossing1,NULL,LightsChanger, lights+0);
+    usleep(80000);
+    int lc2 = pthread_create(&crossing2,NULL,LightsChanger, lights+1);
+    usleep(80000);
+    int lc3 = pthread_create(&crossing3,NULL,LightsChanger, lights+2);
+    usleep(80000);
+    int lc4 = pthread_create(&crossing4,NULL,LightsChanger, lights+3);
 
 
     createRoad2();
@@ -528,7 +522,7 @@ int main()
     {
         thread_args[i].lights_pointers = lights;
         thread_args[i].number = i;
-
+	
         int result = pthread_create(&threads[i], NULL, moveCar,(void *) &thread_args[i]);
         if(result){
             printf("MAIN: Thread %d was not created!\n", i);
@@ -545,7 +539,10 @@ int main()
     endwin();
     for(int i=0; i<NUMBER_OF_CARS;i++) pthread_join(threads[i],NULL);
     pthread_join(road2Thread,NULL);
-    pthread_join(lightChanger, NULL);
+    pthread_join(crossing1, NULL);
+    pthread_join(crossing2, NULL);
+    pthread_join(crossing3, NULL);
+    pthread_join(crossing4, NULL);
     road1.clear();
     road2.clear();
     return 0;
