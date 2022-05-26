@@ -366,7 +366,7 @@ void* moveCar(void* argument) //wątek poruszania się auta
             if(road1.at(i).x == 8) //obsługa skrzyżowania nr 1
             {
                 pthread_mutex_lock(&mutex1);
-                if(*(lights) != true) pthread_cond_wait(&cond[0], &mutex1);
+                while(*(lights) != true) pthread_cond_wait(&cond[0], &mutex1);
                 road1.at(i).x++;
                 pthread_mutex_unlock(&mutex1);
             }
