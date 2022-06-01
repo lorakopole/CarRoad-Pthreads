@@ -520,16 +520,16 @@ void* moveCar(void* argument) //wątek poruszania się auta
         {
             if(road1.at(i).x == 8) //obsługa skrzyżowania nr 1
             {
-                cross1_road1.push_back(road1.at(i).name);
+                cross1_road1.push_back(road1.at(i).name); //dodawanie auta do kolejki (vectora)
                 pthread_mutex_lock(&mutexcross1_road1);
-                while(cross1_road1.at(0) != road1.at(i).name) 
+                while(cross1_road1.at(0) != road1.at(i).name) //jeśli vector nie jest na pierwszej pozycji, czeka az jakies auto zjedzie ze skrzyżowania
                 {
                     pthread_cond_wait(&condcross1_road1, &mutexcross1_road1);
                 }
                 pthread_mutex_unlock(&mutexcross1_road1);
 
                 pthread_mutex_lock(&mutexLightChange[0]);
-                while(already_crossed[0]>NUMBER_OF_CARS_AT_INTERSECTION) 
+                while(already_crossed[0]>NUMBER_OF_CARS_AT_INTERSECTION)  // nastepnie sprawdza, ile aut już przejechało na skrzyżowaniu. Jeśli za dużo, czeka na następną możliwosć
                 {
                     pthread_cond_wait(&cond[0], &mutexLightChange[0]);
                 }
@@ -537,13 +537,13 @@ void* moveCar(void* argument) //wątek poruszania się auta
                 
 
                 pthread_mutex_lock(&mutexLightChange[0]);
-                while(*(lights) != true) pthread_cond_wait(&cond[0], &mutexLightChange[0]);              
+                while(*(lights) != true) pthread_cond_wait(&cond[0], &mutexLightChange[0]); //następnie czeka na zielone światło, aby przejechać.      
                 road1.at(i).x++;
                 already_crossed[0]++;
                 pthread_mutex_unlock(&mutexLightChange[0]);
 
                 pthread_mutex_lock(&mutexcross1_road1);
-                cross1_road1.erase(cross1_road1.begin());
+                cross1_road1.erase(cross1_road1.begin()); //po przejechaniu znika z wektora i daje znać pozostałym pojazdom, że kolejka się przemieściła.
                 pthread_cond_broadcast(&condcross1_road1);
                 pthread_mutex_unlock(&mutexcross1_road1);
                
@@ -812,30 +812,30 @@ int main()
 
     pthread_join(roadDraw,NULL); //wątek z obsługą przycisku wyłączenia programu
     endwin();
-    cout<<"zakonczono rysowanie"<<endl;
+    //cout<<"zakonczono rysowanie"<<endl;
 
     for(int i=0; i<NUMBER_OF_CARS;i++) 
     {
         pthread_join(threads[i],NULL);
-        cout<<"zakonczono auto "<<i<<" na drodze 1"<<endl;
+        //cout<<"zakonczono auto "<<i<<" na drodze 1"<<endl;
     }
-    cout<<"zakonczono droge 1"<<endl;
+    //cout<<"zakonczono droge 1"<<endl;
 
     pthread_join(CheckForFinish,NULL);
-    cout<<"zakonczono sprawdzanie czy auta skonczyly tor "<<endl;
+    //cout<<"zakonczono sprawdzanie czy auta skonczyly tor "<<endl;
 
     for(int i=0; i<3; i++)
     {
         pthread_join(road2Thread[i],NULL);
     }
 
-    cout<<"zakonczono droge 2"<<endl;
+    //cout<<"zakonczono droge 2"<<endl;
 
     loop2=false;
     for(int i=0; i<4; i++)
     {
         pthread_join(crossing[i], NULL);
-        cout<<"zakonczono skrzyzowanie "<<i+1<<endl;
+        //cout<<"zakonczono skrzyzowanie "<<i+1<<endl;
     }
     
     road1.clear();
