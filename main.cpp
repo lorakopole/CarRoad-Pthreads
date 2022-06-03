@@ -1,6 +1,6 @@
 //Program w języku c, zajmujący się obsługą wątków poprzez bibliotekę pthreads
 //Etap 2 - sygnalizacja świetla - na skrzyzowaniach torów znajduje się sygnalizacja świetlna. Gdy światło jest zielone, samochód może przejechać przez skrzyżowanie. Jeśli jest czerwone, zatrzymuje się do czasu zmiany światła na zielone
-
+//etap 3 - na zielonym świetle może przejechać tylko NUMBER_OF_CARS_AT_INTERSECTION aut, reszta czeka w kolejce.
 #include <iostream>
 #include <time.h>
 #include <stdlib.h>
@@ -340,8 +340,9 @@ void* MoveRoad2Cars(void* argument) //poruszanie aut
         {
             if(road2.at(i).y==8) //obsługa skrzyzowania nr 3
             {
-                cross3_road2.push_back(road2.at(i).name);
+                
                 pthread_mutex_lock(&mutexCross3_road2);
+                cross3_road2.push_back(road2.at(i).name);
                 while(cross3_road2.at(0) != road2.at(i).name) 
                 {
                     pthread_cond_wait(&condCross3_road2, &mutexCross3_road2);
@@ -369,8 +370,9 @@ void* MoveRoad2Cars(void* argument) //poruszanie aut
             }
             else if(road2.at(i).y==17) //obsługa skrzyzowania nr 2
             {
-                cross2_road2.push_back(road2.at(i).name);
+                
                 pthread_mutex_lock(&mutexCross2_road2);
+                cross2_road2.push_back(road2.at(i).name);
                 while(cross2_road2.at(0) != road2.at(i).name) 
                 {
                     pthread_cond_wait(&condCross2_road2, &mutexCross2_road2);
@@ -409,8 +411,9 @@ void* MoveRoad2Cars(void* argument) //poruszanie aut
         {
             if(road2.at(i).y==21) //obsługa skrzyzowania nr 1
             {
-                cross1_road2.push_back(road2.at(i).name);
+                
                 pthread_mutex_lock(&mutexCross1_road2);
+                cross1_road2.push_back(road2.at(i).name);
                 while(cross1_road2.at(0) != road2.at(i).name) 
                 {
                     pthread_cond_wait(&condCross1_road2, &mutexCross1_road2);
@@ -438,8 +441,9 @@ void* MoveRoad2Cars(void* argument) //poruszanie aut
             }
             else if(road2.at(i).y==12) //obsługa skrzyzowania nr 4
             {
-                cross4_road2.push_back(road2.at(i).name);
+                
                 pthread_mutex_lock(&mutexCross4_road2);
+                cross4_road2.push_back(road2.at(i).name);
                 while(cross4_road2.at(0) != road2.at(i).name) 
                 {
                     pthread_cond_wait(&condCross4_road2, &mutexCross4_road2);
@@ -520,8 +524,9 @@ void* moveCar(void* argument) //wątek poruszania się auta
         {
             if(road1.at(i).x == 8) //obsługa skrzyżowania nr 1
             {
-                cross1_road1.push_back(road1.at(i).name); //dodawanie auta do kolejki (vectora)
+                
                 pthread_mutex_lock(&mutexcross1_road1);
+                cross1_road1.push_back(road1.at(i).name); //dodawanie auta do kolejki (vectora)
                 while(cross1_road1.at(0) != road1.at(i).name) //jeśli vector nie jest na pierwszej pozycji, czeka az jakies auto zjedzie ze skrzyżowania
                 {
                     pthread_cond_wait(&condcross1_road1, &mutexcross1_road1);
@@ -551,8 +556,9 @@ void* moveCar(void* argument) //wątek poruszania się auta
             }
             else if(road1.at(i).x == 17) //obsługa skrzyżowania nr 2
             {
-                cross2_road1.push_back(road1.at(i).name);
+                
                 pthread_mutex_lock(&mutexCross2_road1);
+                cross2_road1.push_back(road1.at(i).name);
                 while(cross2_road1.at(0) != road1.at(i).name) 
                 {
                     pthread_cond_wait(&condCross2_road1, &mutexCross2_road1);
@@ -592,8 +598,9 @@ void* moveCar(void* argument) //wątek poruszania się auta
             if(road1.at(i).x == 21) //obsługa skrzyżowania nr 3
             {
 
-                cross3_road1.push_back(road1.at(i).name);
+                
                 pthread_mutex_lock(&mutexCross3_road1);
+                cross3_road1.push_back(road1.at(i).name);
                 while(cross3_road1.at(0) != road1.at(i).name) 
                 {
                     pthread_cond_wait(&condCross3_road1, &mutexCross3_road1);
@@ -622,8 +629,9 @@ void* moveCar(void* argument) //wątek poruszania się auta
             }
             else if(road1.at(i).x == 12) //obsługa skrzyżowania nr 4
             {
-                cross4_road1.push_back(road1.at(i).name);
+                
                 pthread_mutex_lock(&mutexcross4_road1);
+                cross4_road1.push_back(road1.at(i).name);
                 while(cross4_road1.at(0) != road1.at(i).name) 
                 {
                     pthread_cond_wait(&condcross4_road1, &mutexcross4_road1);
