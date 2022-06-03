@@ -1,6 +1,6 @@
 //Program w języku c, zajmujący się obsługą wątków poprzez bibliotekę pthreads
 //Etap 2 - sygnalizacja świetla - na skrzyzowaniach torów znajduje się sygnalizacja świetlna. Gdy światło jest zielone, samochód może przejechać przez skrzyżowanie. Jeśli jest czerwone, zatrzymuje się do czasu zmiany światła na zielone
-
+//etap 3 - na zielonym świetle może przejechać tylko NUMBER_OF_CARS_AT_INTERSECTION aut, reszta czeka w kolejce.
 #include <iostream>
 #include <time.h>
 #include <stdlib.h>
@@ -8,11 +8,14 @@
 #include <pthread.h>
 #include <ncurses.h>
 #include <vector>
+#include <algorithm>
+
 using namespace std;
 
 #define NUMBER_OF_CARS 10 //liczba aut na torze nr 2
 #define NUMBER_OF_LOOPS 5 //liczba petli dla aut na torze nr1, +2 
 #define LIGHTS_TIME 3000000 //liczba mikrosekund pomiędzy zmianami świateł
+#define NUMBER_OF_CARS_AT_INTERSECTION 4 //liczba aut (n-1), które mogą jednocześnie przejechać na jednym zielonym świetle. Nalezy podac (n-1)
 struct car //struktura auta
 {
     char name;
@@ -21,6 +24,7 @@ struct car //struktura auta
     int loop;
     int velocity;
     int delay;
+    int position;
 };
 
 struct args //struktura przechowująca indeks auta i wskaźnik na światła
@@ -34,14 +38,49 @@ pthread_t threads[NUMBER_OF_CARS];
 struct args thread_args1[NUMBER_OF_CARS]; //tablica przechowująca indeksy aut i wskaźnik na światła (droga 1)
 
 
+//wektory z autami na drogach
 vector<car> road1;
 vector<car> road2;
-bool loop = true; //boolean odpowiedzialny za petle aut
 
-pthread_mutex_t mutex1 = PTHREAD_MUTEX_INITIALIZER; //mutex dla skrzyżowania 1
-pthread_mutex_t mutex2 = PTHREAD_MUTEX_INITIALIZER; //mutex dla skrzyżowania 2
-pthread_mutex_t mutex3 = PTHREAD_MUTEX_INITIALIZER; //mutex dla skrzyżowania 3
-pthread_mutex_t mutex4 = PTHREAD_MUTEX_INITIALIZER; //mutex dla skrzyżowania 4
+bool loop = true; //boolean odpowiedzialny za petle aut
+bool loop2 = true;
+
+//wektory kolejek na skrzyzowaniach (droga nr 1)
+int already_crossed[4];
+vector<char> cross1_road1;
+vector<char> cross2_road1;
+vector<char> cross3_road1;
+vector<char> cross4_road1;
+pthread_cond_t condcross1_road1 = PTHREAD_COND_INITIALIZER;
+pthread_mutex_t mutexcross1_road1 = PTHREAD_MUTEX_INITIALIZER; //mutex dla skrzyżowania 1
+pthread_cond_t condCross2_road1 = PTHREAD_COND_INITIALIZER;
+pthread_mutex_t mutexCross2_road1 = PTHREAD_MUTEX_INITIALIZER; //mutex dla skrzyżowania 2
+pthread_cond_t condCross3_road1 = PTHREAD_COND_INITIALIZER;
+pthread_mutex_t mutexCross3_road1 = PTHREAD_MUTEX_INITIALIZER; //mutex dla skrzyżowania 3
+pthread_cond_t condcross4_road1 = PTHREAD_COND_INITIALIZER;
+pthread_mutex_t mutexcross4_road1 = PTHREAD_MUTEX_INITIALIZER; //mutex dla skrzyżowania 4
+
+
+//wektory kolejek na skrzyzowaniach (droga nr 2)
+
+int already_crossed2[4];
+vector<char> cross1_road2;
+vector<char> cross2_road2;
+vector<char> cross3_road2;
+vector<char> cross4_road2;
+pthread_cond_t condCross1_road2 = PTHREAD_COND_INITIALIZER;
+pthread_mutex_t mutexCross1_road2 = PTHREAD_MUTEX_INITIALIZER; //mutex dla skrzyżowania 1
+pthread_cond_t condCross2_road2 = PTHREAD_COND_INITIALIZER;
+pthread_mutex_t mutexCross2_road2 = PTHREAD_MUTEX_INITIALIZER; //mutex dla skrzyżowania 2
+pthread_cond_t condCross3_road2 = PTHREAD_COND_INITIALIZER;
+pthread_mutex_t mutexCross3_road2 = PTHREAD_MUTEX_INITIALIZER; //mutex dla skrzyżowania 3
+pthread_cond_t condCross4_road2 = PTHREAD_COND_INITIALIZER;
+pthread_mutex_t mutexCross4_road2 = PTHREAD_MUTEX_INITIALIZER; //mutex dla skrzyżowania 4
+
+
+
+pthread_mutex_t mutexLightChange[4]; //mutex dla skrzyżowania 1
+
 
 
 pthread_cond_t cond[4];
@@ -67,6 +106,33 @@ void* printRoad(void* argument) //druk drogi
     while(getch()!='x') //#działa dopóki nie kliknie się x
     {
     erase();
+    
+    
+    //drukowanie listy aut oczekujacych
+
+    // mvaddch(56, 56, (char)already_crossed[0]+48);
+    // for(int i=0; i<cross1_road1.size();i++)
+    // {
+    //     mvaddch(60+i, 56, cross1_road1.at(i));
+    // }
+
+    // mvaddch(56, 60, (char)already_crossed[1]+48);
+    // for(int i=0; i<cross2_road1.size();i++)
+    // {
+    //     mvaddch(60+i, 60, cross2_road1.at(i));
+    // }
+
+    // mvaddch(56, 64, (char)already_crossed[2]+48);
+    // for(int i=0; i<cross3_road1.size();i++)
+    // {
+    //     mvaddch(60+i, 64, cross3_road1.at(i));
+    // }
+
+    // mvaddch(56, 68, (char)already_crossed[3]+48);
+    // for(int i=0; i<cross4_road1.size();i++)
+    // {
+    //     mvaddch(60+i, 68, cross4_road1.at(i));
+    // }
 
     //drukowanie torów
 
@@ -124,7 +190,7 @@ void* printRoad(void* argument) //druk drogi
     }
 
     //drukorwanie swiatel
-    pthread_mutex_lock(&mutex1);
+    pthread_mutex_lock(&mutexLightChange[0]);
     if(*(lights) == false) //skrzyzowanie nr 1
     {
         attron(COLOR_PAIR(1));
@@ -145,8 +211,8 @@ void* printRoad(void* argument) //druk drogi
         mvaddch(20,10,'N');
         attroff(COLOR_PAIR(1));
     }
-    pthread_mutex_unlock(&mutex1);
-    pthread_mutex_lock(&mutex2);
+    pthread_mutex_unlock(&mutexLightChange[0]);
+    pthread_mutex_lock(&mutexLightChange[1]);
     if(*(lights+1) == false) //skrzyzowanie nr 2
     {
         attron(COLOR_PAIR(1));
@@ -168,8 +234,8 @@ void* printRoad(void* argument) //druk drogi
         mvaddch(18,19,'N');
         attroff(COLOR_PAIR(1));
     }
-    pthread_mutex_unlock(&mutex2);
-    pthread_mutex_lock(&mutex3);
+    pthread_mutex_unlock(&mutexLightChange[1]);
+    pthread_mutex_lock(&mutexLightChange[2]);
 
     if(*(lights+2) == false) //skrzyzowanie nr 3
     {
@@ -191,8 +257,8 @@ void* printRoad(void* argument) //druk drogi
         mvaddch(9,19,'N');
         attroff(COLOR_PAIR(1));
     }
-    pthread_mutex_unlock(&mutex3);
-    pthread_mutex_lock(&mutex4);
+    pthread_mutex_unlock(&mutexLightChange[2]);
+    pthread_mutex_lock(&mutexLightChange[3]);
 
 
     if(*(lights+3) == false) //skrzyzowanie nr 4
@@ -215,7 +281,7 @@ void* printRoad(void* argument) //druk drogi
         mvaddch(11,10,'N');
         attroff(COLOR_PAIR(1));
     }
-    pthread_mutex_unlock(&mutex4);
+    pthread_mutex_unlock(&mutexLightChange[3]);
 
     usleep(10);
     refresh();
@@ -223,6 +289,7 @@ void* printRoad(void* argument) //druk drogi
     loop = false;
     pthread_exit(0);
 }
+
 
 void createRoad2() //tworzenie drogi
 {
@@ -248,7 +315,7 @@ void createRoad2() //tworzenie drogi
             }
         }
         name++;
-        temp = {name,Xpos,Ypos,0,speed,0};
+        temp = {name,Xpos,Ypos,0,speed,0,0};
         road2.push_back(temp);
     }
 }
@@ -273,17 +340,63 @@ void* MoveRoad2Cars(void* argument) //poruszanie aut
         {
             if(road2.at(i).y==8) //obsługa skrzyzowania nr 3
             {
-                pthread_mutex_lock(&mutex3);
-                while(*(lights+2) != false) pthread_cond_wait(&cond[2], &mutex3);
+                
+                pthread_mutex_lock(&mutexCross3_road2);
+                cross3_road2.push_back(road2.at(i).name);
+                while(cross3_road2.at(0) != road2.at(i).name) 
+                {
+                    pthread_cond_wait(&condCross3_road2, &mutexCross3_road2);
+                }
+                pthread_mutex_unlock(&mutexCross3_road2);
+
+                pthread_mutex_lock(&mutexLightChange[2]);
+                while(already_crossed2[2]>NUMBER_OF_CARS_AT_INTERSECTION) 
+                {
+                    pthread_cond_wait(&cond[2], &mutexLightChange[2]);
+                }
+                pthread_mutex_unlock(&mutexLightChange[2]);
+                
+
+                pthread_mutex_lock(&mutexLightChange[2]);
+                while(*(lights+2) != false) pthread_cond_wait(&cond[2], &mutexLightChange[2]);              
                 road2.at(i).y++;
-                pthread_mutex_unlock(&mutex3);
+                already_crossed2[2]++;
+                pthread_mutex_unlock(&mutexLightChange[2]);
+
+                pthread_mutex_lock(&mutexCross3_road2);
+                cross3_road2.erase(cross3_road2.begin());
+                pthread_cond_broadcast(&condCross3_road2);
+                pthread_mutex_unlock(&mutexCross3_road2);
             }
             else if(road2.at(i).y==17) //obsługa skrzyzowania nr 2
             {
-                pthread_mutex_lock(&mutex2);
-                while(*(lights+1) != false) pthread_cond_wait(&cond[1], &mutex2);
+                
+                pthread_mutex_lock(&mutexCross2_road2);
+                cross2_road2.push_back(road2.at(i).name);
+                while(cross2_road2.at(0) != road2.at(i).name) 
+                {
+                    pthread_cond_wait(&condCross2_road2, &mutexCross2_road2);
+                }
+                pthread_mutex_unlock(&mutexCross2_road2);
+
+                pthread_mutex_lock(&mutexLightChange[1]);
+                while(already_crossed2[1]>NUMBER_OF_CARS_AT_INTERSECTION) 
+                {
+                    pthread_cond_wait(&cond[1], &mutexLightChange[1]);
+                }
+                pthread_mutex_unlock(&mutexLightChange[1]);
+                
+
+                pthread_mutex_lock(&mutexLightChange[1]);
+                while(*(lights+1) != false) pthread_cond_wait(&cond[1], &mutexLightChange[1]);              
                 road2.at(i).y++;
-                pthread_mutex_unlock(&mutex2);
+                already_crossed2[1]++;
+                pthread_mutex_unlock(&mutexLightChange[1]);
+
+                pthread_mutex_lock(&mutexCross2_road2);
+                cross2_road2.erase(cross2_road2.begin());
+                pthread_cond_broadcast(&condCross2_road2);
+                pthread_mutex_unlock(&mutexCross2_road2);
             }
             else
             {
@@ -298,17 +411,63 @@ void* MoveRoad2Cars(void* argument) //poruszanie aut
         {
             if(road2.at(i).y==21) //obsługa skrzyzowania nr 1
             {
-                pthread_mutex_lock(&mutex1);
-                while(*(lights) != false) pthread_cond_wait(&cond[0], &mutex1);
+                
+                pthread_mutex_lock(&mutexCross1_road2);
+                cross1_road2.push_back(road2.at(i).name);
+                while(cross1_road2.at(0) != road2.at(i).name) 
+                {
+                    pthread_cond_wait(&condCross1_road2, &mutexCross1_road2);
+                }
+                pthread_mutex_unlock(&mutexCross1_road2);
+
+                pthread_mutex_lock(&mutexLightChange[0]);
+                while(already_crossed2[0]>NUMBER_OF_CARS_AT_INTERSECTION) 
+                {
+                    pthread_cond_wait(&cond[0], &mutexLightChange[0]);
+                }
+                pthread_mutex_unlock(&mutexLightChange[0]);
+                
+
+                pthread_mutex_lock(&mutexLightChange[0]);
+                while(*(lights) != false) pthread_cond_wait(&cond[0], &mutexLightChange[0]);              
                 road2.at(i).y--;
-                pthread_mutex_unlock(&mutex1);
+                already_crossed2[0]++;
+                pthread_mutex_unlock(&mutexLightChange[0]);
+
+                pthread_mutex_lock(&mutexCross1_road2);
+                cross1_road2.erase(cross1_road2.begin());
+                pthread_cond_broadcast(&condCross1_road2);
+                pthread_mutex_unlock(&mutexCross1_road2);
             }
             else if(road2.at(i).y==12) //obsługa skrzyzowania nr 4
             {
-                pthread_mutex_lock(&mutex4);
-                while(*(lights+3) != false) pthread_cond_wait(&cond[3], &mutex4);
+                
+                pthread_mutex_lock(&mutexCross4_road2);
+                cross4_road2.push_back(road2.at(i).name);
+                while(cross4_road2.at(0) != road2.at(i).name) 
+                {
+                    pthread_cond_wait(&condCross4_road2, &mutexCross4_road2);
+                }
+                pthread_mutex_unlock(&mutexCross4_road2);
+
+                pthread_mutex_lock(&mutexLightChange[3]);
+                while(already_crossed2[3]>NUMBER_OF_CARS_AT_INTERSECTION) 
+                {
+                    pthread_cond_wait(&cond[3], &mutexLightChange[3]);
+                }
+                pthread_mutex_unlock(&mutexLightChange[3]);
+                
+
+                pthread_mutex_lock(&mutexLightChange[3]);
+                while(*(lights+3) != false) pthread_cond_wait(&cond[3], &mutexLightChange[3]);              
                 road2.at(i).y--;
-                pthread_mutex_unlock(&mutex4);
+                already_crossed2[3]++;
+                pthread_mutex_unlock(&mutexLightChange[3]);
+
+                pthread_mutex_lock(&mutexCross4_road2);
+                cross4_road2.erase(cross4_road2.begin());
+                pthread_cond_broadcast(&condCross4_road2);
+                pthread_mutex_unlock(&mutexCross4_road2);
             }
             else
             {
@@ -329,7 +488,7 @@ car makeCar(int i) //tworzenie auta o indeksie i
     char name = 97 + i;
     int speed;
     speed = rand()%1000 + 100;
-    temp = {name,Xpos,Ypos,0,speed,rand()%20000};
+    temp = {name,Xpos,Ypos,0,speed,rand()%20000,0};
     return temp;
 }
 void createCars() //tworzenie aut
@@ -365,17 +524,65 @@ void* moveCar(void* argument) //wątek poruszania się auta
         {
             if(road1.at(i).x == 8) //obsługa skrzyżowania nr 1
             {
-                pthread_mutex_lock(&mutex1);
-                while(*(lights) != true) pthread_cond_wait(&cond[0], &mutex1);
+                
+                pthread_mutex_lock(&mutexcross1_road1);
+                cross1_road1.push_back(road1.at(i).name); //dodawanie auta do kolejki (vectora)
+                while(cross1_road1.at(0) != road1.at(i).name) //jeśli vector nie jest na pierwszej pozycji, czeka az jakies auto zjedzie ze skrzyżowania
+                {
+                    pthread_cond_wait(&condcross1_road1, &mutexcross1_road1);
+                }
+                pthread_mutex_unlock(&mutexcross1_road1);
+
+                pthread_mutex_lock(&mutexLightChange[0]);
+                while(already_crossed[0]>NUMBER_OF_CARS_AT_INTERSECTION)  // nastepnie sprawdza, ile aut już przejechało na skrzyżowaniu. Jeśli za dużo, czeka na następną możliwosć
+                {
+                    pthread_cond_wait(&cond[0], &mutexLightChange[0]);
+                }
+                pthread_mutex_unlock(&mutexLightChange[0]);
+                
+
+                pthread_mutex_lock(&mutexLightChange[0]);
+                while(*(lights) != true) pthread_cond_wait(&cond[0], &mutexLightChange[0]); //następnie czeka na zielone światło, aby przejechać.      
                 road1.at(i).x++;
-                pthread_mutex_unlock(&mutex1);
+                already_crossed[0]++;
+                pthread_mutex_unlock(&mutexLightChange[0]);
+
+                pthread_mutex_lock(&mutexcross1_road1);
+                cross1_road1.erase(cross1_road1.begin()); //po przejechaniu znika z wektora i daje znać pozostałym pojazdom, że kolejka się przemieściła.
+                pthread_cond_broadcast(&condcross1_road1);
+                pthread_mutex_unlock(&mutexcross1_road1);
+               
+
             }
             else if(road1.at(i).x == 17) //obsługa skrzyżowania nr 2
             {
-                pthread_mutex_lock(&mutex2);
-                while(*(lights+1) != true) pthread_cond_wait(&cond[1], &mutex2);
+                
+                pthread_mutex_lock(&mutexCross2_road1);
+                cross2_road1.push_back(road1.at(i).name);
+                while(cross2_road1.at(0) != road1.at(i).name) 
+                {
+                    pthread_cond_wait(&condCross2_road1, &mutexCross2_road1);
+                }
+                pthread_mutex_unlock(&mutexCross2_road1);
+
+                pthread_mutex_lock(&mutexLightChange[1]);
+                while(already_crossed[1]>NUMBER_OF_CARS_AT_INTERSECTION) 
+                {
+                    pthread_cond_wait(&cond[1], &mutexLightChange[1]);
+                }
+                pthread_mutex_unlock(&mutexLightChange[1]);
+
+                pthread_mutex_lock(&mutexLightChange[1]);
+                while(*(lights+1) != true) pthread_cond_wait(&cond[1], &mutexLightChange[1]);
                 road1.at(i).x++;
-                pthread_mutex_unlock(&mutex2);
+                already_crossed[1]++;
+                pthread_mutex_unlock(&mutexLightChange[1]);
+
+                pthread_mutex_lock(&mutexCross2_road1);
+                cross2_road1.erase(cross2_road1.begin());
+                pthread_cond_broadcast(&condCross2_road1);
+                pthread_mutex_unlock(&mutexCross2_road1);
+                
             }
             else 
             {
@@ -390,17 +597,64 @@ void* moveCar(void* argument) //wątek poruszania się auta
         {
             if(road1.at(i).x == 21) //obsługa skrzyżowania nr 3
             {
-                pthread_mutex_lock(&mutex3);
-                while(*(lights+2) != true) pthread_cond_wait(&cond[2], &mutex3);
+
+                
+                pthread_mutex_lock(&mutexCross3_road1);
+                cross3_road1.push_back(road1.at(i).name);
+                while(cross3_road1.at(0) != road1.at(i).name) 
+                {
+                    pthread_cond_wait(&condCross3_road1, &mutexCross3_road1);
+                }
+                pthread_mutex_unlock(&mutexCross3_road1);
+
+                pthread_mutex_lock(&mutexLightChange[2]);
+                while(already_crossed[2]>NUMBER_OF_CARS_AT_INTERSECTION) 
+                {
+                    pthread_cond_wait(&cond[2], &mutexLightChange[2]);
+                }
+                pthread_mutex_unlock(&mutexLightChange[2]);
+
+
+                pthread_mutex_lock(&mutexLightChange[2]);
+                while(*(lights+2) != true) pthread_cond_wait(&cond[2], &mutexLightChange[2]);
                 road1.at(i).x--;
-                pthread_mutex_unlock(&mutex3);
+                already_crossed[2]++;
+                pthread_mutex_unlock(&mutexLightChange[2]);
+
+                pthread_mutex_lock(&mutexCross3_road1);
+                cross3_road1.erase(cross3_road1.begin());
+                pthread_cond_broadcast(&condCross3_road1);
+                pthread_mutex_unlock(&mutexCross3_road1);
+                
             }
             else if(road1.at(i).x == 12) //obsługa skrzyżowania nr 4
             {
-                pthread_mutex_lock(&mutex4);
-                while(*(lights+3) != true) pthread_cond_wait(&cond[3], &mutex4);
+                
+                pthread_mutex_lock(&mutexcross4_road1);
+                cross4_road1.push_back(road1.at(i).name);
+                while(cross4_road1.at(0) != road1.at(i).name) 
+                {
+                    pthread_cond_wait(&condcross4_road1, &mutexcross4_road1);
+                }
+                pthread_mutex_unlock(&mutexcross4_road1);
+
+                pthread_mutex_lock(&mutexLightChange[3]);
+                while(already_crossed[3]>NUMBER_OF_CARS_AT_INTERSECTION) 
+                {
+                    pthread_cond_wait(&cond[3], &mutexLightChange[3]);
+                }
+                pthread_mutex_unlock(&mutexLightChange[3]);
+
+                pthread_mutex_lock(&mutexLightChange[3]);
+                while(*(lights+3) != true) pthread_cond_wait(&cond[3], &mutexLightChange[3]);
                 road1.at(i).x--;
-                pthread_mutex_unlock(&mutex4);
+                already_crossed[3]++;
+                pthread_mutex_unlock(&mutexLightChange[3]);
+
+                pthread_mutex_lock(&mutexcross4_road1);
+                cross4_road1.erase(cross4_road1.begin());
+                pthread_cond_broadcast(&condcross4_road1);
+                pthread_mutex_unlock(&mutexcross4_road1);
             }
             else 
             {
@@ -457,15 +711,21 @@ void* LightsChanger(void* argument) //funkcja odpowiedzialna za zmienianie świa
     lights = Args->lights_pointers;
     i = Args->number;
 
-    while(loop)
+    while(loop2)
     {
+        already_crossed[i] = 0;
         
         *(lights) = true;
+        pthread_mutex_lock(&mutexLightChange[i]);
         pthread_cond_broadcast(&cond[i]);
+        pthread_mutex_unlock(&mutexLightChange[i]);
         usleep(LIGHTS_TIME);
-        
+
+        already_crossed2[i] = 0;
         *(lights) = false;
+        pthread_mutex_lock(&mutexLightChange[i]);
         pthread_cond_broadcast(&cond[i]);
+        pthread_mutex_unlock(&mutexLightChange[i]);
         usleep(LIGHTS_TIME);
 
     }
@@ -487,6 +747,19 @@ int main()
     cond[2] = PTHREAD_COND_INITIALIZER;
     cond[3] = PTHREAD_COND_INITIALIZER;
 
+
+    for(int i=0; i<4; i++) mutexLightChange[i] = PTHREAD_MUTEX_INITIALIZER;
+
+    already_crossed[0]=0;
+    already_crossed[1]=0;
+    already_crossed[2]=0;
+    already_crossed[3]=0;
+
+    already_crossed2[0]=0;
+    already_crossed2[1]=0;
+    already_crossed2[2]=0;
+    already_crossed2[3]=0;
+
     struct args crossing_args[4]; //tablica przechowująca indeksy swiatel i wskaznik na swiatlo
     struct args thread_args2[3]; //tablica przechowująca indeksy aut i wskaźnik na światła (droga 2)
 
@@ -502,17 +775,15 @@ int main()
         crossing_args[i].lights_pointers = &lights[i];
     }
     
-    pthread_t crossing1;
-    pthread_t crossing2; 
-    pthread_t crossing3; 
-    pthread_t crossing4; 
-    int lc1 = pthread_create(&crossing1,NULL,LightsChanger, &crossing_args[0]);
+    pthread_t crossing[4];
+    int lc1 = pthread_create(&crossing[0],NULL,LightsChanger, &crossing_args[0]);
     usleep(80000);
-    int lc2 = pthread_create(&crossing2,NULL,LightsChanger, &crossing_args[1]);
+    int lc2 = pthread_create(&crossing[1],NULL,LightsChanger, &crossing_args[1]);
     usleep(80000);
-    int lc3 = pthread_create(&crossing3,NULL,LightsChanger, &crossing_args[2]);
+    int lc3 = pthread_create(&crossing[2],NULL,LightsChanger, &crossing_args[2]);
     usleep(80000);
-    int lc4 = pthread_create(&crossing4,NULL,LightsChanger, &crossing_args[3]);
+    int lc4 = pthread_create(&crossing[3],NULL,LightsChanger, &crossing_args[3]);
+
 
 
     createRoad2();
@@ -524,12 +795,10 @@ int main()
         thread_args2[i].lights_pointers = lights;
     }
 
-    pthread_t road2Thread1;
-    pthread_t road2Thread2;
-    pthread_t road2Thread3;
-    int c1r2 = pthread_create(&road2Thread1, NULL, MoveRoad2Cars, (void *) &thread_args2[0]);
-    int c2r2 = pthread_create(&road2Thread2, NULL, MoveRoad2Cars, (void *) &thread_args2[1]);
-    int c3r2 = pthread_create(&road2Thread3, NULL, MoveRoad2Cars, (void *) &thread_args2[2]);
+    pthread_t road2Thread[3];
+    int c1r2 = pthread_create(&road2Thread[0], NULL, MoveRoad2Cars, (void *) &thread_args2[0]);
+    int c2r2 = pthread_create(&road2Thread[1], NULL, MoveRoad2Cars, (void *) &thread_args2[1]);
+    int c3r2 = pthread_create(&road2Thread[2], NULL, MoveRoad2Cars, (void *) &thread_args2[2]);
 
     createCars();
 
@@ -553,37 +822,29 @@ int main()
     endwin();
     //cout<<"zakonczono rysowanie"<<endl;
 
+    for(int i=0; i<NUMBER_OF_CARS;i++) 
+    {
+        pthread_join(threads[i],NULL);
+        //cout<<"zakonczono auto "<<i<<" na drodze 1"<<endl;
+    }
+    //cout<<"zakonczono droge 1"<<endl;
+
     pthread_join(CheckForFinish,NULL);
     //cout<<"zakonczono sprawdzanie czy auta skonczyly tor "<<endl;
 
-    //procedura odblokowywania potencjalnie zablokowanych wątków
-    // *(lights) = true;
-    // *(lights+1) = true;
-    // *(lights+2) = true;
-    // *(lights+3) = true;
-    // for(int i=0; i<4; i++) pthread_cond_broadcast(&cond[i]);
-
-         for(int i=0; i<NUMBER_OF_CARS;i++) 
+    for(int i=0; i<3; i++)
     {
-        pthread_join(threads[i],NULL);
-        //cout<<"zakonczono auto "<<i<<"na drodze 1"<<endl;
+        pthread_join(road2Thread[i],NULL);
     }
-   
-    //cout<<"zakonczono droge 1"<<endl;
-    pthread_join(road2Thread1,NULL);
-    pthread_join(road2Thread2,NULL);
-    pthread_join(road2Thread3,NULL);
+
     //cout<<"zakonczono droge 2"<<endl;
-    pthread_join(crossing1, NULL);
-    //cout<<"zakonczono skrzyzowanie 1"<<endl;
-    pthread_join(crossing2, NULL);
-    //cout<<"zakonczono skrzyzowanie 2"<<endl;
-    pthread_join(crossing3, NULL);
-    //cout<<"zakonczono skrzyzowanie 3"<<endl;
-    pthread_join(crossing4, NULL);
-    //cout<<"zakonczono skrzyzowanie 4"<<endl;
 
-
+    loop2=false;
+    for(int i=0; i<4; i++)
+    {
+        pthread_join(crossing[i], NULL);
+        //cout<<"zakonczono skrzyzowanie "<<i+1<<endl;
+    }
     
     road1.clear();
     road2.clear();
